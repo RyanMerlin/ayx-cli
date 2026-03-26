@@ -28,13 +28,19 @@ Use `--target-version` to install a specific release and `--skip-confirm` for au
 
 ## Quick install
 
-Copy the one-liner installer into a terminal that already has `curl`, `tar`, and a POSIX-compatible shell (Linux, macOS, or Git Bash/WSL on Windows). The script probes your OS/arch, downloads the matching GitHub release asset, and drops `ayx` into `~/.local/bin` by default:
+The most reliable one-line install for this workspace is to build and install directly from source:
 
+```powershell
+cargo install --locked --path .
 ```
+
+That produces the `ayx` binary in Cargo's global bin directory and keeps the install reproducible from the checked-in workspace. If you prefer a release-based install on Unix-like shells, the repo also includes `scripts/install.sh`:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.sh | bash
 ```
 
-Set `AYX_VERSION` to a specific tag (e.g., `v0.1.0`) or `AYX_INSTALL_DIR` to override the install directory before running the script. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
+The release script honors `AYX_VERSION` for a fixed tag and `AYX_INSTALL_DIR` for a custom install path. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
 
 ## Configuration
 

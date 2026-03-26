@@ -6,3 +6,18 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+ayx-core = { path = "../ayx-core" }
+base64 = "0.21"
+chrono.workspace = true
+csv = "1"
+fs_extra = "1.3"
+reqwest.workspace = true
+roxmltree.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2 = "0.11"
+url.workspace = true
+walkdir = "2"
+zip = "0.6"

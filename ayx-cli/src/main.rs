@@ -1,12 +1,29 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
 
 use ayx_core::envelope::Envelope;
-use ayx_core::profile::Config;
+use ayx_core::profile::{Config, ServerProfile};
+use ayx_core::definitions::DEFAULT_RUNTIME_SETTINGS_PATH;
+use ayx_server::mongo::{
+    backup_envelope, inventory_envelope, restore_envelope, status_envelope,
+};
+use ayx_server::logs::{
+    discover_log_inventory, extract_context, parse_gallery_csv, parse_gallery_events,
+    parse_service_events, recent_log_candidates, summarize_log_file, tail_log_file,
+};
+use ayx_server::{call_operation, import_swagger};
+use ayx_server::util::{
+    ayx_paths, backup_plan, capture_system_info, run_server_backup, runtime_settings_summary,
+    write_runtime_settings_json,
+};
+use ayx_server::upgrade::{
+    compute_path, run_apply, run_backup, run_bundle, run_plan, run_postcheck, run_precheck,
+};
 use self_update::backends::github::Update as GitHubUpdate;
 use self_update::Status;
 
@@ -31,7 +48,14 @@ enum Command {
         #[command(subcommand)]
         command: ApiCommand,
     },
-    Server,
+    Server {
+        #[command(subcommand)]
+        command: ServerCommand,
+    },
+    Upgrade {
+        #[command(subcommand)]
+        command: UpgradeCommand,
+    },
     Sqlserver,
     Workflow,
     Cloud,
@@ -727,6 +751,185 @@ enum ApiCommand {
     },
 }
 
+#[derive(Subcommand, Debug)]
+enum ServerCommand {
+    Api {
+        #[command(subcommand)]
+        command: ServerApiCommand,
+    },
+    SystemInfo {
+        #[arg(long, default_value = "system_info.json")]
+        output: PathBuf,
+    },
+    RuntimeSettings {
+        #[arg(long, default_value = DEFAULT_RUNTIME_SETTINGS_PATH)]
+        path: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    AyxPaths,
+    ServerLogs {
+        #[command(subcommand)]
+        command: ServerLogsCommand,
+    },
+    BackupPlan {
+        #[arg(long)]
+        backup_dir: PathBuf,
+    },
+    Backup {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long, default_value = "backups")]
+        backup_dir: PathBuf,
+        #[arg(long)]
+        apply: bool,
+        #[arg(long, default_value = "audits")]
+        audit_dir: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ServerLogsCommand {
+    Discover {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+    },
+    Inventory {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+    },
+    Summary {
+        #[arg(long)]
+        path: PathBuf,
+    },
+    Context {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        needle: String,
+        #[arg(long, default_value_t = 25)]
+        before: usize,
+        #[arg(long, default_value_t = 25)]
+        after: usize,
+    },
+    ParseCsv {
+        #[arg(long)]
+        path: PathBuf,
+    },
+    ServiceEvents {
+        #[arg(long)]
+        path: PathBuf,
+    },
+    GalleryEvents {
+        #[arg(long)]
+        path: PathBuf,
+    },
+    Tail {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long, default_value_t = 100)]
+        lines: usize,
+    },
+    Recent {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long, default_value_t = 7)]
+        days: i64,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ServerApiCommand {
+    ImportSwagger {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long, default_value = "3")]
+        version: String,
+        #[arg(long)]
+        url: String,
+        #[arg(long, default_value = ".omni/swagger")]
+        cache_dir: PathBuf,
+    },
+    Call {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long)]
+        operation_id: String,
+        #[arg(long, default_value = "3")]
+        version: String,
+        #[arg(long, default_value = ".omni/swagger")]
+        cache_dir: PathBuf,
+        #[arg(long)]
+        swagger: Option<PathBuf>,
+        #[arg(long)]
+        body: Option<PathBuf>,
+        #[arg(long, value_name = "KEY=VALUE")]
+        param: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum UpgradeCommand {
+    Path {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long, default_value = "embedded-mongo")]
+        deployment: String,
+    },
+    Precheck {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long)]
+        target: String,
+        #[arg(long, default_value = "upgrade-precheck")]
+        out: PathBuf,
+        #[arg(long, default_value = "embedded-mongo")]
+        deployment: String,
+    },
+    Backup {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long)]
+        r#type: String,
+        #[arg(long, default_value = "upgrade-backup")]
+        out: PathBuf,
+    },
+    Plan {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long, default_value = "upgrade-plan")]
+        out: PathBuf,
+        #[arg(long, default_value = "embedded-mongo")]
+        deployment: String,
+    },
+    Apply {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        apply: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    Postcheck {
+        #[arg(long, default_value = "config.yaml")]
+        profile: PathBuf,
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long, default_value = "upgrade-postcheck")]
+        out: PathBuf,
+    },
+    Bundle {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+}
+
 fn load_profile(path: &PathBuf) -> Result<Config> {
     Ok(Config::load_from_path(path)?)
 }
@@ -739,16 +942,40 @@ fn load_payload(path: &PathBuf) -> Result<Value> {
     Ok(value)
 }
 
+fn server_profile(config: &Config) -> Result<&ServerProfile> {
+    config.server.as_ref().ok_or_else(|| {
+        anyhow!(
+            "config missing server section; add server.webapi_url, curator_api_key, and curator_api_secret"
+        )
+    })
+}
+
+fn parse_key_value_params(items: &[String]) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+    for item in items {
+        let mut parts = item.splitn(2, '=');
+        let key = parts
+            .next()
+            .filter(|k| !k.is_empty())
+            .ok_or_else(|| anyhow!("invalid --param '{}', expected key=value", item))?;
+        let value = parts
+            .next()
+            .ok_or_else(|| anyhow!("invalid --param '{}', expected key=value", item))?;
+        map.insert(key.to_string(), value.to_string());
+    }
+    Ok(map)
+}
+
 fn execute(cli: Cli) -> Result<Envelope> {
     let envelope = match cli.command {
         Command::Mongo { command } => match command {
             MongoCommand::Status { profile } => {
                 let profile = load_profile(&profile)?;
-                ayx_mongo::status_envelope(&profile)?
+                status_envelope(&profile)?
             }
             MongoCommand::Inventory { profile } => {
                 let profile = load_profile(&profile)?;
-                ayx_mongo::inventory_envelope(&profile)?
+                inventory_envelope(&profile)?
             }
             MongoCommand::Backup {
                 profile,
@@ -757,7 +984,7 @@ fn execute(cli: Cli) -> Result<Envelope> {
                 audit_dir,
             } => {
                 let profile = load_profile(&profile)?;
-                ayx_mongo::backup_envelope(&profile, &output_dir, apply, &audit_dir)?
+                backup_envelope(&profile, &output_dir, apply, &audit_dir)?
             }
             MongoCommand::Restore {
                 profile,
@@ -766,7 +993,7 @@ fn execute(cli: Cli) -> Result<Envelope> {
                 audit_dir,
             } => {
                 let profile = load_profile(&profile)?;
-                ayx_mongo::restore_envelope(&profile, &input_path, apply, &audit_dir)?
+                restore_envelope(&profile, &input_path, apply, &audit_dir)?
             }
         },
         Command::Api { command } => match command {
@@ -2158,7 +2385,208 @@ fn execute(cli: Cli) -> Result<Envelope> {
                 )?
             }
         },
-        Command::Server => Envelope::ok("server command tree scaffolded"),
+        Command::Server { command } => match command {
+            ServerCommand::Api { command } => match command {
+                ServerApiCommand::ImportSwagger {
+                    profile,
+                    version,
+                    url,
+                    cache_dir,
+                } => {
+                    let config = load_profile(&profile)?;
+                    let server = server_profile(&config)?;
+                    let cache_name = format!("{}_swagger_v{}.json", config.profile_name, version);
+                    import_swagger(server, &url, &cache_dir, &cache_name)?
+                }
+                ServerApiCommand::Call {
+                    profile,
+                    operation_id,
+                    version,
+                    cache_dir,
+                    swagger,
+                    body,
+                    param,
+                } => {
+                    let config = load_profile(&profile)?;
+                    let server = server_profile(&config)?;
+                    let cache_name = format!("{}_swagger_v{}.json", config.profile_name, version);
+                    let swagger_path = swagger
+                        .clone()
+                        .unwrap_or_else(|| cache_dir.join(&cache_name));
+                    if !swagger_path.exists() {
+                        bail!(
+                            "swagger '{}' not found; run server api import-swagger first",
+                            swagger_path.display()
+                        );
+                    }
+                    let params = parse_key_value_params(&param)?;
+                    let payload = match body {
+                        Some(path) => Some(load_payload(&path)?),
+                        None => None,
+                    };
+                    call_operation(server, &operation_id, &params, payload, &swagger_path)?
+                }
+            },
+            ServerCommand::SystemInfo { output } => {
+                let system_info = capture_system_info()?;
+                fs::write(&output, serde_json::to_string_pretty(&system_info)?)
+                    .with_context(|| format!("failed to write '{}'", output.display()))?;
+                Envelope::ok_with_data(
+                    "system info captured",
+                    json!({ "output": output.display().to_string(), "data": system_info }),
+                )
+            }
+            ServerCommand::RuntimeSettings { path, output } => {
+                let summary = runtime_settings_summary(&path)?;
+                if let Some(ref output_path) = output {
+                    write_runtime_settings_json(&path, output_path)?;
+                }
+                Envelope::ok_with_data(
+                    "runtime settings summarized",
+                    json!({
+                        "path": path.display().to_string(),
+                        "output": output.as_ref().map(|p| p.display().to_string()),
+                        "data": summary
+                    }),
+                )
+            }
+            ServerCommand::AyxPaths => {
+                let paths = ayx_paths();
+                Envelope::ok_with_data("ayx paths resolved", paths)
+            }
+            ServerCommand::ServerLogs { command } => match command {
+                ServerLogsCommand::Discover { profile } => {
+                    let config = load_profile(&profile)?;
+                    Envelope::ok_with_data(
+                        "log sources discovered",
+                        discover_log_inventory(&config),
+                    )
+                }
+                ServerLogsCommand::Inventory { profile } => {
+                    let config = load_profile(&profile)?;
+                    Envelope::ok_with_data(
+                        "log inventory discovered",
+                        discover_log_inventory(&config),
+                    )
+                }
+                ServerLogsCommand::Summary { path } => {
+                    let summary = summarize_log_file(&path)?;
+                    Envelope::ok_with_data("log summary generated", summary)
+                }
+                ServerLogsCommand::Context {
+                    path,
+                    needle,
+                    before,
+                    after,
+                } => {
+                    let context = extract_context(&path, &needle, before, after)?;
+                    Envelope::ok_with_data("log context extracted", context)
+                }
+                ServerLogsCommand::ParseCsv { path } => {
+                    let parsed = parse_gallery_csv(&path)?;
+                    Envelope::ok_with_data("gallery csv parsed", parsed)
+                }
+                ServerLogsCommand::ServiceEvents { path } => {
+                    let parsed = parse_service_events(&path)?;
+                    Envelope::ok_with_data("service log events parsed", parsed)
+                }
+                ServerLogsCommand::GalleryEvents { path } => {
+                    let parsed = parse_gallery_events(&path)?;
+                    Envelope::ok_with_data("gallery log events parsed", parsed)
+                }
+                ServerLogsCommand::Tail { path, lines } => {
+                    let tail = tail_log_file(&path, lines)?;
+                    Envelope::ok_with_data("log tail generated", tail)
+                }
+                ServerLogsCommand::Recent { profile, days } => {
+                    let config = load_profile(&profile)?;
+                    Envelope::ok_with_data(
+                        "recent log candidates discovered",
+                        recent_log_candidates(&config, days),
+                    )
+                }
+            }
+            ServerCommand::BackupPlan { backup_dir } => {
+                let plan = backup_plan(&backup_dir)?;
+                Envelope::ok_with_data("backup plan generated", plan)
+            }
+            ServerCommand::Backup {
+                profile,
+                backup_dir,
+                apply,
+                audit_dir,
+            } => {
+                let config = load_profile(&profile)?;
+                let data = run_server_backup(&config, &backup_dir, apply, &audit_dir)?;
+                Envelope::ok_with_data(
+                    if apply {
+                        "server backup executed"
+                    } else {
+                        "dry-run only: pass --apply to execute server backup"
+                    },
+                    data,
+                )
+            }
+        },
+        Command::Upgrade { command } => match command {
+            UpgradeCommand::Path {
+                from,
+                to,
+                deployment,
+            } => {
+                let detail = compute_path(&from, &to, &deployment);
+                Envelope::ok_with_data("upgrade path computed", detail)
+            }
+            UpgradeCommand::Precheck {
+                profile,
+                target,
+                out,
+                deployment,
+            } => {
+                let config = load_profile(&profile)?;
+                let detail = run_precheck(&config, &target, &out, &deployment)?;
+                Envelope::ok_with_data("upgrade precheck completed", detail)
+            }
+            UpgradeCommand::Backup {
+                profile,
+                r#type,
+                out,
+            } => {
+                let config = load_profile(&profile)?;
+                let detail = run_backup(&config, &r#type, &out)?;
+                Envelope::ok_with_data("upgrade backup completed", detail)
+            }
+            UpgradeCommand::Plan {
+                from,
+                to,
+                out,
+                deployment,
+            } => {
+                let detail = run_plan(&from, &to, &deployment, &out)?;
+                Envelope::ok_with_data("upgrade plan generated", detail)
+            }
+            UpgradeCommand::Apply {
+                manifest,
+                apply,
+                yes,
+            } => {
+                let detail = run_apply(&manifest, apply, yes)?;
+                Envelope::ok_with_data("upgrade apply simulated", detail)
+            }
+            UpgradeCommand::Postcheck {
+                profile,
+                manifest,
+                out,
+            } => {
+                let config = load_profile(&profile)?;
+                let detail = run_postcheck(&config, &manifest, &out)?;
+                Envelope::ok_with_data("upgrade postcheck completed", detail)
+            }
+            UpgradeCommand::Bundle { input, out } => {
+                let detail = run_bundle(&input, &out)?;
+                Envelope::ok_with_data("upgrade bundle created", detail)
+            }
+        },
         Command::Sqlserver => Envelope::ok("sqlserver command tree scaffolded"),
         Command::Workflow => Envelope::ok("workflow command tree scaffolded"),
         Command::Cloud => Envelope::ok("cloud command tree scaffolded"),

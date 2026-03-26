@@ -5,8 +5,6 @@ members = [
   "ayx-core",
   "ayx-server",
   "ayx-api",
-  "ayx-mongo",
-  "ayx-sqlserver",
   "ayx-workflow",
   "ayx-cloud",
   "ayx-docs-schema",
