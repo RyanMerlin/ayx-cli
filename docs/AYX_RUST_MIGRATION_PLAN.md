@@ -6,9 +6,9 @@ MongoDB is a first-class subsystem and prioritized for v1: both embedded Alteryx
 
 ## Implementation Changes
 - Rust workspace crates:
-  - `ayx-cli`, `ayx-core`, `ayx-server`, `ayx-api`, `ayx-mongo`, `ayx-sqlserver`, `ayx-workflow`, `ayx-cloud`, `ayx-docs-schema`.
+  - `ayx-cli`, `ayx-core`, `ayx-server`, `ayx-api`, `ayx-workflow`, `ayx-cloud`, `ayx-docs-schema`.
 
-- Mongo-first architecture in `ayx-mongo`:
+- Mongo support lives in `ayx-server`:
   - Explicit connection modes:
     - `embedded` (discover from RuntimeSettings.xml and Alteryx install context)
     - `managed` (external URI/host/port with full user control)
@@ -23,6 +23,9 @@ MongoDB is a first-class subsystem and prioritized for v1: both embedded Alteryx
     - auth-transition read/write flows
     - workflow ownership and migration-related updates
     - backup/restore helper orchestration
+- SQL Server support lives in `ayx-server`:
+  - connection and execution helpers for server-side SQL workloads
+  - same safety model and audit output conventions as other mutating commands
 - Safety model:
   - all mutating Mongo commands default to dry-run
   - `--apply` required for writes

@@ -57,6 +57,26 @@ Execution behavior:
 - `ayx api workflow-questions --profile <path> --workflow-id <id> [--version-id <id>]`
 - `ayx api workflow-package --profile <path> --workflow-id <id> [--version-id <id>] [--output-path <path>]`
 - `ayx api workflow-version-upload --profile <path> --workflow-id <id> --file-path <path> --name <value> --owner-id <id> [--execution-mode Safe|SemiSafe|Standard] [--workflow-credential-type Default|Required|Specific] [--others-may-download] [--others-can-execute] [--has-private-data-exemption] [--comments <text>] [--make-published] [--credential-id <id>] [--bypass-workflow-version-check] [--apply]`
+
+## Upgrade Commands
+- `ayx upgrade path --from <source> --to <target> [--deployment embedded-mongo|user-mongo|sql]`
+- `ayx upgrade precheck --profile <path> --target <version> --out <dir> [--deployment embedded-mongo|user-mongo|sql]`
+- `ayx upgrade backup --profile <path> --type <mongo|runtime|logs|all> --out <dir>`
+- `ayx upgrade plan --from <source> --to <target> --out <dir> [--deployment embedded-mongo|user-mongo|sql]`
+- `ayx upgrade apply --manifest <path> --apply --yes`
+- `ayx upgrade postcheck --profile <path> --manifest <path> --out <dir>`
+- `ayx upgrade bundle --input <dir> --out <zip>`
+
+Upgrade commands rely on the optional `upgrade` block in `config.yaml`, for example:
+
+```
+upgrade:
+  current_version: 2024.1
+  deployment: embedded-mongo
+```
+
+`precheck` validates runtime/service expectations and curator access before evaluating the supported path between the configured `current_version` and the CLI `--target`. `backup` captures runtime/service files, writes `backup_results.csv`, and records instructions for embedded Mongo. `plan` writes `upgrade_plan.json` plus the hashed `plan_manifest.json` and a run manifest describing each hop. `apply` replays the plan manifest with simulated steps (`execution_audit.csv`), while `postcheck` verifies migration logs and the manifest hash. `bundle` zips an input directory for sharing with operations or support.
+
 ## Update Command
 - `ayx update [--repo-owner <owner>] [--repo-name <repo>] [--bin-name <name>] [--target-version <tag>] [--skip-confirm]`
 
@@ -119,6 +139,12 @@ Execution behavior:
 - `ayx api credential-update --profile <path> --credential-id <id> --payload-file <path> [--apply]`
 - `ayx api credential-delete --profile <path> --credential-id <id> [--force] [--apply]`
 - `ayx api transfer-workflow-owner --profile <path> --workflow-id <id> --owner-id <id> [--transfer-schedules <bool>] [--apply] [--audit-dir <dir>]`
+
+## Server Commands
+- `ayx server api import-swagger --profile <path> --url <url> [--version 3] [--cache-dir .omni/swagger]`
+- `ayx server api call --profile <path> --operation-id <id> [--version 3] [--cache-dir .omni/swagger] [--swagger <path>] [--param KEY=VALUE ...] [--body <path>]`
+
+Server commands reuse `config.yaml` but require the `server` section illustrated above (`webapi_url`, `curator_api_key`, `curator_api_secret`, `verify_tls`). `import-swagger` downloads the OpenAPI document for the requested version and caches it under `cache-dir/<profile>_swagger_v<version>.json`. `call` loads the cached Swagger, resolves the `operationId`, substitutes path/query parameters supplied via `--param`, and exchanges JSON payloads with the Server API using the curator credentials so automation can inspect `status_code`, `url`, and the parsed response.
 
 Mutating commands (`schedule-create`, `schedule-update`, `schedule-patch`, `schedule-delete`, `collection-create`, `collection-update`, `collection-delete`, any collection membership mutation or permission update, `credential-add`, `credential-update`, `credential-delete`, `credential-share-user`, `credential-share-user-group`, `credential-unshare-*`, `subscription-create`, `subscription-update`, `subscription-delete`, `subscription-change-users`, `user-update`, `user-delete`, `user-transfer-assets`, `user-deactivate`, `user-password-reset`, `workflow-version-upload`, `usergroup-create`, `usergroup-update`, `usergroup-delete`, `usergroup-*` membership moves, and all DCM admin mutators) require `--apply` before they invoke the live API to avoid accidental writes; when that flag is omitted the CLI returns a dry-run envelope with guidance to provide the safety gate.
 

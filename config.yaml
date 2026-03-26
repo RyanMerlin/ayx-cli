@@ -35,3 +35,11 @@ api:
     scope: ""
     # token requests automatically target ${api.base_url}oauth2/token
   timeout_ms: 15000
+server:
+  webapi_url: http://localhost/webapi/
+  curator_api_key: YOUR_CURATOR_API_KEY
+  curator_api_secret: YOUR_CURATOR_API_SECRET
+  verify_tls: true
+upgrade:
+  current_version: 2024.1
+  deployment: embedded-mongo

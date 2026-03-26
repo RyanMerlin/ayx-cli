@@ -1787,6 +1787,7 @@ mod tests {
     use super::*;
     use ayx_core::profile::{
         ApiAuth, ApiProfile, Config, MongoDatabases, MongoEmbedded, MongoMode, MongoProfile,
+        ServerProfile,
     };
 
     #[test]
@@ -1854,15 +1855,20 @@ mod tests {
                 timeout_ms: Some(1000),
             }),
             alteryx_one: None,
+            server: Some(ServerProfile {
+                webapi_url: "http://localhost/webapi/".to_string(),
+                curator_api_key: "abc".to_string(),
+                curator_api_secret: "secret".to_string(),
+                verify_tls: Some(true),
+            }),
+            upgrade: None,
         };
 
         let temp_dir = std::env::temp_dir().join(format!(
             "ayx-api-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ));
-        let env = workflow_transfer_owner_envelope(
-            &profile, "wf-1", "owner-2", true, false, false, &temp_dir,
-        )
+        let env = workflow_transfer_owner_envelope(&profile, "wf-1", "owner-2", true, false, &temp_dir)
         .expect("dry run should succeed");
 
         assert_eq!(env.data["dry_run"], true);

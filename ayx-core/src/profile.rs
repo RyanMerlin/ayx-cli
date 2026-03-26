@@ -28,6 +28,10 @@ pub struct Config {
     pub mongo: MongoProfile,
     pub api: Option<ApiProfile>,
     pub alteryx_one: Option<AlteryxOneProfile>,
+    #[serde(default)]
+    pub server: Option<ServerProfile>,
+    #[serde(default)]
+    pub upgrade: Option<UpgradeProfile>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -105,8 +109,28 @@ pub enum ApiAuthMode {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct UpgradeProfile {
+    pub current_version: Option<String>,
+    pub deployment: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AlteryxOneProfile {
     pub account_email: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ServerProfile {
+    pub webapi_url: String,
+    pub curator_api_key: String,
+    pub curator_api_secret: String,
+    pub verify_tls: Option<bool>,
+}
+
+impl ServerProfile {
+    pub fn verify_tls(&self) -> bool {
+        self.verify_tls.unwrap_or(true)
+    }
 }
 
 impl Config {
@@ -215,6 +239,24 @@ impl Config {
             if !one.account_email.contains('@') {
                 return Err(ProfileError::Invalid(
                     "alteryx_one.account_email must be a valid email".to_string(),
+                ));
+            }
+        }
+
+        if let Some(server) = &self.server {
+            if server.webapi_url.trim().is_empty() {
+                return Err(ProfileError::Invalid(
+                    "server.webapi_url cannot be empty".to_string(),
+                ));
+            }
+            if server.curator_api_key.trim().is_empty() {
+                return Err(ProfileError::Invalid(
+                    "server.curator_api_key cannot be empty".to_string(),
+                ));
+            }
+            if server.curator_api_secret.trim().is_empty() {
+                return Err(ProfileError::Invalid(
+                    "server.curator_api_secret cannot be empty".to_string(),
                 ));
             }
         }
