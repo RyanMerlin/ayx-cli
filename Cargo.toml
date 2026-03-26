@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+  "ayx-cli",
+  "ayx-core",
+  "ayx-server",
+  "ayx-api",
+  "ayx-mongo",
+  "ayx-sqlserver",
+  "ayx-workflow",
+  "ayx-cloud",
+  "ayx-docs-schema",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+authors = ["AYX Team"]
+
+[workspace.dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "multipart"] }
+roxmltree = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+url = "2"

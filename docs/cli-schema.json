@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AYX CLI Envelope",
+  "type": "object",
+  "required": ["ok", "message", "timestamp_utc", "data"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "message": { "type": "string" },
+    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "data": {}
+  },
+  "additionalProperties": false
+}

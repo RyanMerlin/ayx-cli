@@ -1,0 +1,36 @@
+profile_name: local-dev
+mongo:
+  mode: embedded  # switch to 'managed' and fill mongo.managed.* when targeting an external MongoDB.
+  databases:
+    gallery_name: AlteryxGallery
+    service_name: AlteryxService
+  embedded:
+    runtime_settings_path: null     # auto-discovered from ProgramData/ProgramFiles when null; set explicitly to override.
+    alteryx_service_path: null     # auto-resolves from RuntimeSettings install paths but can be pinned.
+    restore_target_path: null      # derived from RuntimeSettings when available.
+  managed:
+    url: null                      # prefer a MongoDB URI when hitting a managed cluster.
+    host: localhost
+    port: 27017
+    auth_database: admin
+    username: mongo_user
+    password: REPLACE_WITH_SECRET
+    tls:
+      enabled: false
+      ca_path: null
+      cert_path: null
+      key_path: null
+      allow_invalid_hostnames: false
+    timeout_ms: 15000
+    retry_count: 2
+    max_pool_size: 20
+api:
+  base_url: http://172.27.171.32/webapi/
+  auth:
+    mode: oauth2_client_credentials
+    client_id: 8DC1ED3149EBEDD9a9a0c6ad83958e1ed7ac47bb5554e21855628fca658a90fcbcccc28ad6e9375
+    client_secret: 80b3006ffedb5ed5a5a858d5a4d054caf1f589ccfa552dbaf7d96cc186754f34
+    scope: ""
+  timeout_ms: 15000
+alteryx_one:
+  account_email: your.name@company.com
