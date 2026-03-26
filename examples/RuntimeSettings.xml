@@ -1,9 +1,62 @@
-<RuntimeSettings>
-  <MongoDBConnectionString>mongodb://localhost:27017</MongoDBConnectionString>
-  <MongoDBHost>localhost</MongoDBHost>
-  <MongoDBPort>27017</MongoDBPort>
-  <MongoDBUser>gallery_admin</MongoDBUser>
-  <MongoDBAuthDatabase>admin</MongoDBAuthDatabase>
-  <AlteryxGalleryDatabase>AlteryxGallery</AlteryxGalleryDatabase>
-  <AlteryxServiceDatabase>AlteryxService</AlteryxServiceDatabase>
-</RuntimeSettings>
+<?xml version="1.0" encoding="UTF-8"?>
+<SystemSettings>
+	<Authentication>
+		<ServiceProviderEntityID>http://example-host/webapi/</ServiceProviderEntityID>
+	</Authentication>
+	<Controller>
+		<CleanupQueueTimeToLive>129600</CleanupQueueTimeToLive>
+		<DCMSecretEncrypted>REDACTED_DCM_SECRET</DCMSecretEncrypted>
+		<EmbeddedMongoDBEnabled>True</EmbeddedMongoDBEnabled>
+		<EmbeddedMongoDBRootPath>D:\ProgramData\Alteryx\Service\Persistence\MongoDB</EmbeddedMongoDBRootPath>
+		<GalleryEnabled>True</GalleryEnabled>
+		<LoggingEnabled>True</LoggingEnabled>
+		<LoggingPath>C:\ProgramData\Alteryx\Service\AlteryxServiceLog.log</LoggingPath>
+		<LoggingSeverityThreshold>5</LoggingSeverityThreshold>
+		<ServerSecretEncrypted>REDACTED_SERVER_SECRET</ServerSecretEncrypted>
+		<SQLitePath>D:\ProgramData\Alteryx\Service\Persistence</SQLitePath>
+		<StorageKeysEncrypted>REDACTED_STORAGE_KEYS</StorageKeysEncrypted>
+		<WebInterfaceEnabled>True</WebInterfaceEnabled>
+		<WebInterfaceStagingPath>D:\ProgramData\Alteryx\Service\Staging</WebInterfaceStagingPath>
+	</Controller>
+	<Dcm>
+		<DcmMode>Basic</DcmMode>
+	</Dcm>
+	<Engine>
+		<DefaultTempFilePath>D:\ProgramData\Alteryx\Engine</DefaultTempFilePath>
+		<InterfaceLanguage>English</InterfaceLanguage>
+		<LogFilePath>D:\ProgramData\Alteryx\Engine\logs</LogFilePath>
+		<PackageStagingPath>D:\ProgramData\Alteryx\Engine\Staging</PackageStagingPath>
+		<ProxyConfiguration>ProxyRequiresCredentials=false
+ProxyCommonUserName=
+ProxyCommonPassword=
+</ProxyConfiguration>
+		<ServerManagedResources>True</ServerManagedResources>
+	</Engine>
+	<Environment>
+		<Configured>True</Configured>
+		<Hostname>example-host</Hostname>
+		<SetupType>Gallery</SetupType>
+		<WorkingPath>D:\ProgramData\Alteryx\</WorkingPath>
+	</Environment>
+	<Gallery>
+		<BaseAddress>http://example-host/gallery/</BaseAddress>
+		<DefaultGalleryAdminUserName>admin@example.com</DefaultGalleryAdminUserName>
+		<LoggingPath>D:\ProgramData\Alteryx\Gallery\Logs</LoggingPath>
+		<SmtpEmail>notifications@example.com</SmtpEmail>
+		<SmtpPasswordEncrypted>REDACTED_SMTP_SECRET</SmtpPasswordEncrypted>
+		<SmtpServerName>smtp.example.com</SmtpServerName>
+		<SmtpUserName>smtp-user@example.com</SmtpUserName>
+		<WebApiBaseAddress>http://example-host/webapi/</WebApiBaseAddress>
+		<WorkingPath>D:\ProgramData\Alteryx\Gallery</WorkingPath>
+	</Gallery>
+	<Service>
+		<MigrationVersionNumber>1</MigrationVersionNumber>
+	</Service>
+	<Telemetry>
+		<EnableCustomerManagedTelemetry></EnableCustomerManagedTelemetry>
+	</Telemetry>
+	<Worker>
+		<StagingPath>D:\ProgramData\Alteryx\Service\Staging</StagingPath>
+		<ThreadCount>2</ThreadCount>
+	</Worker>
+</SystemSettings>
