@@ -7,18 +7,23 @@ Rust-first workspace scaffold for the `ayx` CLI.
 - Top-level `ayx mongo` and `ayx api` command trees are wired to the shared envelope and profile loader.
 - Dry-run/apply safety model, audit artifacts, and managed/embedded Mongo tooling scaffolds exist.
 - API operations cover governance-heavy endpoints such as schedules, collections, DCM/credentials, user-groups, subscriptions, and workflow ownership changes backed by Swagger-derived contracts.
-- `ayx update` now hooks into GitHub releases and the Windows release workflow so the `ayx` binary can refresh itself via `self_update`.
+- `ayx update` hooks into GitHub releases and the release workflow produces installable assets for Windows, Linux, and macOS.
 
 ## Next
 - Replace the Mongo orchestration stubs with production-grade AlteryxGallery/AlteryxService clients (full parity with the Python tooling).
 - Expand the API coverage (schedules, collections, DCM, owner transfer edge cases) and harden contract tests around the Swagger definitions.
-- Add integration pipelines and multi-platform release automation (Windows/Linux/macOS).
+- Continue hardening the release/install story and add CI checks around packaged artifacts.
 
 ## Binary & release
 
-The workspace exposes a single binary called `ayx`. The GitHub Actions workflow at `.github/workflows/build-release.yml` runs on each push to `main` and every new `v*` tag to build the release artifacts on Windows (the base platform for Server deployments).
+The workspace exposes a single binary called `ayx`. The GitHub Actions workflow at `.github/workflows/build-release.yml` runs on each push to `main` and every new `v*` tag to build release artifacts for:
 
-When cutting a release, publish the compiled `ayx` executable (and optional archives for other hosts) under a GitHub tag so the `ayx update` command can find the asset that matches the local target triple.
+- Windows: `ayx-x86_64-pc-windows-msvc.zip`
+- Linux: `ayx-x86_64-unknown-linux-gnu.tar.gz`
+- macOS Intel: `ayx-x86_64-apple-darwin.tar.gz`
+- macOS Apple Silicon: `ayx-aarch64-apple-darwin.tar.gz`
+
+Those archives are what the installer scripts and `ayx update` expect to fetch from GitHub Releases.
 
 ## Self-update
 
@@ -28,19 +33,27 @@ Use `--target-version` to install a specific release and `--skip-confirm` for au
 
 ## Quick install
 
-The most reliable one-line install for this workspace is to build and install directly from source:
+Preferred install methods:
+
+- Source build, reproducible from the checked-out workspace:
 
 ```powershell
 cargo install --locked --path .
 ```
 
-That produces the `ayx` binary in Cargo's global bin directory and keeps the install reproducible from the checked-in workspace. If you prefer a release-based install on Unix-like shells, the repo also includes `scripts/install.sh`:
+- Release-based install on Linux/macOS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.sh | bash
 ```
 
-The release script honors `AYX_VERSION` for a fixed tag and `AYX_INSTALL_DIR` for a custom install path. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
+- Release-based install on Windows PowerShell:
+
+```powershell
+iwr https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.ps1 | iex
+```
+
+The release scripts honor `AYX_VERSION` for a fixed tag and `AYX_INSTALL_DIR` for a custom install path. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
 
 ## Configuration
 
