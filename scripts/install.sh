@@ -42,7 +42,7 @@ PLATFORM="$(detect_platform)"
 if [[ "$VERSION" == "latest" ]]; then
   DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/${BINARY_NAME}-${PLATFORM}.tar.gz"
 else
-  DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/${VERSION}/download/${BINARY_NAME}-${PLATFORM}.tar.gz"
+  DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${BINARY_NAME}-${PLATFORM}.tar.gz"
 fi
 
 TMPDIR="$(mktemp -d)"

@@ -27,13 +27,13 @@ jobs:
             bin_name: ayx
             shell: bash
             package_ext: targz
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
             artifact: ayx-x86_64-apple-darwin.tar.gz
             bin_name: ayx
             shell: bash
             package_ext: targz
-          - os: macos-latest
+          - os: macos-14
             target: aarch64-apple-darwin
             artifact: ayx-aarch64-apple-darwin.tar.gz
             bin_name: ayx
