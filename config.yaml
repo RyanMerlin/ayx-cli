@@ -1,4 +1,6 @@
 profile_name: local-dev
+alteryx_one:
+  account_email: your.name@company.com  # used for gallery automation and workflow transfers
 mongo:
   mode: embedded  # switch to 'managed' and fill mongo.managed.* when targeting an external MongoDB.
   databases:
@@ -31,6 +33,5 @@ api:
     client_id: 8DC1ED3149EBEDD9a9a0c6ad83958e1ed7ac47bb5554e21855628fca658a90fcbcccc28ad6e9375
     client_secret: 80b3006ffedb5ed5a5a858d5a4d054caf1f589ccfa552dbaf7d96cc186754f34
     scope: ""
+    # token requests automatically target ${api.base_url}oauth2/token
   timeout_ms: 15000
-alteryx_one:
-  account_email: your.name@company.com

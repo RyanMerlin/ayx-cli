@@ -1,5 +1,5 @@
 [package]
-name = "ayx-cli"
+name = "ayx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,3 +13,7 @@ ayx-api = { path = "../ayx-api" }
 ayx-core = { path = "../ayx-core" }
 ayx-mongo = { path = "../ayx-mongo" }
 self_update = "0.17"
+
+[[bin]]
+name = "ayx"
+path = "src/main.rs"

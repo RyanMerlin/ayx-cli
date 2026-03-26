@@ -64,7 +64,7 @@ mongo:
         .args([
             "run",
             "-p",
-            "ayx-cli",
+            "ayx",
             "--",
             "--output",
             "json",

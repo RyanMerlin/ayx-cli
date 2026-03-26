@@ -6,12 +6,35 @@ Rust-first workspace scaffold for the `ayx` CLI.
 - Workspace and crate structure created from the migration plan.
 - Top-level `ayx mongo` and `ayx api` command trees are wired to the shared envelope and profile loader.
 - Dry-run/apply safety model, audit artifacts, and managed/embedded Mongo tooling scaffolds exist.
-- API operations now cover schedule detail/delete/patch (guarded by `--apply`), schedule create/update (payload files with `CreateScheduleContract`/`UpdateScheduleContract`), collection detail/create/delete/update (with payload files for updates), credential share/unshare for users and user groups (via `AddCredentialsUserContract`/`AddCredentialsUserGroupContract`), user-group CRUD/membership management (via `CreateUserGroupContract`/`UpdateUserGroupContract`), DCM connection lookup/shares, DCM admin connection list/upsert/delete/share removal helpers, and the prior status/users/workflows/collections/schedules/DCM listing commands against the Swagger-driven endpoints.
+- API operations cover governance-heavy endpoints such as schedules, collections, DCM/credentials, user-groups, subscriptions, and workflow ownership changes backed by Swagger-derived contracts.
+- `ayx update` now hooks into GitHub releases and the Windows release workflow so the `ayx` binary can refresh itself via `self_update`.
 
 ## Next
 - Replace the Mongo orchestration stubs with production-grade AlteryxGallery/AlteryxService clients (full parity with the Python tooling).
 - Expand the API coverage (schedules, collections, DCM, owner transfer edge cases) and harden contract tests around the Swagger definitions.
 - Add integration pipelines and multi-platform release automation (Windows/Linux/macOS).
+
+## Binary & release
+
+The workspace exposes a single binary called `ayx`. The GitHub Actions workflow at `.github/workflows/build-release.yml` runs on each push to `main` and every new `v*` tag to build the release artifacts on Windows (the base platform for Server deployments).
+
+When cutting a release, publish the compiled `ayx` executable (and optional archives for other hosts) under a GitHub tag so the `ayx update` command can find the asset that matches the local target triple.
+
+## Self-update
+
+`ayx update [--repo-owner <owner>] [--repo-name <repo>] [--bin-name <name>] [--target-version <tag>] [--skip-confirm]` uses the `self_update` crate to fetch a GitHub release asset that matches the running target triple, swaps in the new binary, and reports success through the envelope model. The defaults are `RyanMerlin/ayx-cli` for the release and `ayx` for the binary name, which keeps the upgrade path aligned with the hosted repo.
+
+Use `--target-version` to install a specific release and `--skip-confirm` for automation. Mutating commands still require `--apply` so auto updates never circumvent the existing safety gates.
+
+## Quick install
+
+Copy the one-liner installer into a terminal that already has `curl`, `tar`, and a POSIX-compatible shell (Linux, macOS, or Git Bash/WSL on Windows). The script probes your OS/arch, downloads the matching GitHub release asset, and drops `ayx` into `~/.local/bin` by default:
+
+```
+curl -fsSL https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.sh | bash
+```
+
+Set `AYX_VERSION` to a specific tag (e.g., `v0.1.0`) or `AYX_INSTALL_DIR` to override the install directory before running the script. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
 
 ## Configuration
 
@@ -19,11 +42,10 @@ Rust-first workspace scaffold for the `ayx` CLI.
 
 ### Mongo settings
 
-- `mongo.mode` chooses between `embedded` (Auto-discover RuntimeSettings, `AlteryxService.exe` wrappers, and emongodump/emongorestore) and `managed` (external `mongodump/mongorestore` tools).
+- `mongo.mode` chooses between `embedded` (auto-discover RuntimeSettings, `AlteryxService.exe` wrappers, and the embedded `emongodump/emongorestore` hooks) and `managed` (external `mongodump/mongorestore` tools).
 - `mongo.databases` names the `AlteryxGallery` and `AlteryxService` databases so every command knows which namespaces to touch.
-- When `mongo.mode` is `embedded`, leave `mongo.embedded.runtime_settings_path` null and the CLI will probe `C:\ProgramData\Alteryx\RuntimeSettings.xml`, `%ProgramData%/Alteryx/…`, `%ProgramFiles%/Alteryx/…`, `%ProgramFiles(x86)%/Alteryx/…`, and relocated drives (e.g., `D:\ProgramData`) before asking you to override it manually.
-- `mongo.embedded.alteryx_service_path` and `mongo.embedded.restore_target_path` are optional overrides; the runtime settings file can usually derive the right install and persistence paths.
-- In `managed` mode, provide either `mongo.managed.url` or `host`+`port`. TLS fields (`enabled`, `ca_path`, `cert_path`, `key_path`, `allow_invalid_hostnames`) control how `mongodump/mongorestore` connect, and timeout/retry/pool knobs tune the client's resilience.
+- When `mongo.mode` is `embedded`, leave `mongo.embedded.runtime_settings_path` null and the CLI will probe `C:\ProgramData\Alteryx\RuntimeSettings.xml`, `%ProgramData%/Alteryx/…`, `%ProgramFiles%/Alteryx/…`, `%ProgramFiles(x86)%/Alteryx/…`, or relocated drives (e.g., `D:\ProgramData/Alteryx/RuntimeSettings.xml`) before asking you to override it manually. `restore_target_path` and `alteryx_service_path` are optional overrides derived from the runtime payload.
+- In `managed` mode, provide either `mongo.managed.url` or `host`+`port`. TLS fields (`enabled`, `ca_path`, `cert_path`, `key_path`, `allow_invalid_hostnames`) control how `mongodump/mongorestore` authenticate, and timeout/retry/pool knobs tune the driver's resilience.
 
 ### API settings
 
