@@ -1,81 +1,106 @@
 # AYX CLI
 
-Rust-first workspace scaffold for the `ayx` CLI.
+`ayx` is a Rust workspace for Alteryx administrators and automation agents.
 
-## Current status
-- Workspace and crate structure created from the migration plan.
-- Top-level `ayx mongo` and `ayx api` command trees are wired to the shared envelope and profile loader.
-- Dry-run/apply safety model, audit artifacts, and managed/embedded Mongo tooling scaffolds exist.
-- API operations cover governance-heavy endpoints such as schedules, collections, DCM/credentials, user-groups, subscriptions, and workflow ownership changes backed by Swagger-derived contracts.
-- `ayx update` hooks into GitHub releases and the release workflow produces installable assets for Windows, Linux, and macOS.
+It is designed to be:
+- fast: a single native binary with no interpreter dependency
+- secure: explicit `--apply` gates, audit artifacts, and conservative defaults
+- portable: Windows, Linux, and macOS release targets
+- agent-friendly: structured envelopes, predictable command output, and a future command/tactics/workflow registry for tools like Codex or Claude
 
-## Next
-- Replace the Mongo orchestration stubs with production-grade AlteryxGallery/AlteryxService clients (full parity with the Python tooling).
-- Expand the API coverage (schedules, collections, DCM, owner transfer edge cases) and harden contract tests around the Swagger definitions.
-- Continue hardening the release/install story and add CI checks around packaged artifacts.
+The current focus is Alteryx Server and Gallery administration workflows:
+- Mongo inventory, backup, and restore
+- Server API reads and controlled mutations
+- upgrade planning and post-checks
+- system discovery and log analysis helpers
 
-## Binary & release
+## Quick start
 
-The workspace exposes a single binary called `ayx`. The GitHub Actions workflow at `.github/workflows/build-release.yml` runs on each push to `main` and every new `v*` tag to build release artifacts for:
-
-- Windows: `ayx-x86_64-pc-windows-msvc.zip`
-- Linux: `ayx-x86_64-unknown-linux-gnu.tar.gz`
-- macOS Intel: `ayx-x86_64-apple-darwin.tar.gz`
-- macOS Apple Silicon: `ayx-aarch64-apple-darwin.tar.gz`
-
-Those archives are what the installer scripts and `ayx update` expect to fetch from GitHub Releases.
-
-## Self-update
-
-`ayx update [--repo-owner <owner>] [--repo-name <repo>] [--bin-name <name>] [--target-version <tag>] [--skip-confirm]` uses the `self_update` crate to fetch a GitHub release asset that matches the running target triple, swaps in the new binary, and reports success through the envelope model. The defaults are `RyanMerlin/ayx-cli` for the release and `ayx` for the binary name, which keeps the upgrade path aligned with the hosted repo.
-
-Use `--target-version` to install a specific release and `--skip-confirm` for automation. Mutating commands still require `--apply` so auto updates never circumvent the existing safety gates.
-
-## Quick install
-
-Preferred install methods:
-
-- Source build, reproducible from the checked-out workspace:
+1. Install Rust, then build the CLI from source:
 
 ```powershell
 cargo install --locked --path .
 ```
 
-- Release-based install on Linux/macOS:
+2. Create or copy `config.yaml` into the working directory.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.sh | bash
-```
-
-- Release-based install on Windows PowerShell:
+3. Validate the environment:
 
 ```powershell
-iwr https://raw.githubusercontent.com/RyanMerlin/ayx-cli/main/scripts/install.ps1 | iex
+ayx mongo status --profile config.yaml
+ayx api status --profile config.yaml
+ayx server
 ```
 
-The release scripts honor `AYX_VERSION` for a fixed tag and `AYX_INSTALL_DIR` for a custom install path. The same release assets power `ayx update`, so once the CLI is installed the updater can keep it current.
+4. Use `--output json` when another tool should consume the result.
+
+## What the CLI gives you
+
+- `mongo` for embedded and managed Mongo operations
+- `api` for the Server web API
+- `server` for environment inspection, logs, Swagger import, and lower-level API calls
+- `upgrade` for upgrade path planning, prechecks, backup, apply simulation, and postchecks
+- `update` for GitHub release self-update
+
+The tool returns a consistent envelope model so humans and agents can parse success, failure, and artifact paths in the same way.
+
+## Safety model
+
+- Read-only commands are available without extra flags.
+- Mutating commands require `--apply`.
+- Several workflows also produce audit artifacts so operations can be reviewed or replayed.
+- Unsupported command families currently fail explicitly instead of pretending to succeed.
 
 ## Configuration
 
-`ayx` loads its profile from `config.yaml` in the working directory by default. The current sample covers both embedded and managed Mongo scenarios, API OAuth2 client credentials, and the required Alteryx One account email. Keep secrets out of source control by replacing placeholders with Vault/KeyVault references in production.
+`ayx` loads `config.yaml` by default.
 
-### Mongo settings
+Minimum expectations:
+- `profile_name`
+- `mongo.mode`
+- `mongo.databases.gallery_name`
+- `mongo.databases.service_name`
+- `api.base_url` plus auth settings when using API commands
+- `server.webapi_url`, `server.curator_api_key`, and `server.curator_api_secret` when using Server API commands
+- `alteryx_one.account_email` when using ownership-transfer and related automation
 
-- `mongo.mode` chooses between `embedded` (auto-discover RuntimeSettings, `AlteryxService.exe` wrappers, and the embedded `emongodump/emongorestore` hooks) and `managed` (external `mongodump/mongorestore` tools).
-- `mongo.databases` names the `AlteryxGallery` and `AlteryxService` databases so every command knows which namespaces to touch.
-- When `mongo.mode` is `embedded`, leave `mongo.embedded.runtime_settings_path` null and the CLI will probe `C:\ProgramData\Alteryx\RuntimeSettings.xml`, `%ProgramData%/Alteryx/…`, `%ProgramFiles%/Alteryx/…`, `%ProgramFiles(x86)%/Alteryx/…`, or relocated drives (e.g., `D:\ProgramData/Alteryx/RuntimeSettings.xml`) before asking you to override it manually. `restore_target_path` and `alteryx_service_path` are optional overrides derived from the runtime payload.
-- In `managed` mode, provide either `mongo.managed.url` or `host`+`port`. TLS fields (`enabled`, `ca_path`, `cert_path`, `key_path`, `allow_invalid_hostnames`) control how `mongodump/mongorestore` authenticate, and timeout/retry/pool knobs tune the driver's resilience.
+Embedded Mongo discovery looks for `RuntimeSettings.xml` in the standard Alteryx locations first, then falls back to the configured path if provided.
 
-### API settings
+## Release and install
 
-- `api.base_url` points at the Server web API root (for example `http://172.27.171.32/webapi/`).
-- OAuth2 client credentials are configured under `api.auth` (`client_id`, `client_secret`, optional `scope`). The CLI derives `${api.base_url}oauth2/token` automatically.
-- `api.timeout_ms` keeps HTTP calls responsive while retaining the envelope data model for replay/debug.
+The GitHub Actions workflow at [`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) builds Windows, Linux, and macOS binaries and now runs format, clippy, and tests before packaging.
 
-### Alteryx One
+Release archives:
+- Windows: `ayx-x86_64-pc-windows-msvc.zip`
+- Linux: `ayx-x86_64-unknown-linux-gnu.tar.gz`
+- macOS Intel: `ayx-x86_64-apple-darwin.tar.gz`
+- macOS Apple Silicon: `ayx-aarch64-apple-darwin.tar.gz`
 
-- `alteryx_one.account_email` stores the Alteryx One username used across gallery operations and the owner-transfer automation.
+Install scripts:
+- `scripts/install.ps1`
+- `scripts/install.sh`
 
-### Runtime settings fixture
+## Vision
 
-The repo mirrors a real `RuntimeSettings.xml` at `C:\code\RuntimeSettings.xml` for offline experimentation. Copy a live Server runtime settings file there (or point `mongo.embedded.runtime_settings_path` at an existing install) to exercise the embedded discovery logic.
+The long-term goal is not just a CLI. It is a secure, portable operator for the Alteryx ecosystem that can also serve as a tool and skill substrate for agents.
+
+That means:
+- a stable command catalog
+- a tactical registry for repeatable playbooks
+- workflow/skill descriptions for multi-step operations
+- structured evidence after every run
+- documentation that stays aligned with the actual binary
+
+## Development
+
+Run checks locally:
+
+```powershell
+cargo fmt --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+## Fixtures
+
+The repository includes a `RuntimeSettings.xml` fixture for offline validation of embedded discovery paths.

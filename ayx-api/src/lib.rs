@@ -290,6 +290,7 @@ pub fn workflow_package_envelope(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn workflow_version_upload_envelope(
     config: &Config,
     workflow_id: &str,
@@ -318,9 +319,9 @@ pub fn workflow_version_upload_envelope(
         .unwrap_or_else(|| format!("{}.yxzp", workflow_id));
 
     let url = format!(
-        "{}{}",
+        "{}v3/workflows/{}/versions",
         normalized_base_url(api),
-        format!("v3/workflows/{}/versions", workflow_id)
+        workflow_id
     );
 
     let form_builder = || {
@@ -988,6 +989,7 @@ pub fn credential_unshare_user_group_envelope(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn subscriptions_list_envelope(
     config: &Config,
     name: Option<&str>,
@@ -1868,8 +1870,9 @@ mod tests {
             "ayx-api-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ));
-        let env = workflow_transfer_owner_envelope(&profile, "wf-1", "owner-2", true, false, &temp_dir)
-        .expect("dry run should succeed");
+        let env =
+            workflow_transfer_owner_envelope(&profile, "wf-1", "owner-2", true, false, &temp_dir)
+                .expect("dry run should succeed");
 
         assert_eq!(env.data["dry_run"], true);
         let artifact = env.data["audit_artifact"]

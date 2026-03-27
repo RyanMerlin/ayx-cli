@@ -56,8 +56,8 @@ pub fn runtime_settings_summary(path: &Path) -> Result<Value> {
     Ok(json!({
         "path": path.display().to_string(),
         "metadata": {
-            "created": metadata.as_ref().and_then(|m| m.created().ok()).map(|t| chrono::DateTime::<Utc>::from(t)),
-            "modified": metadata.as_ref().and_then(|m| m.modified().ok()).map(|t| chrono::DateTime::<Utc>::from(t)),
+            "created": metadata.as_ref().and_then(|m| m.created().ok()).map(chrono::DateTime::<Utc>::from),
+            "modified": metadata.as_ref().and_then(|m| m.modified().ok()).map(chrono::DateTime::<Utc>::from),
         },
         "system_settings": {
             "gallery": {
@@ -114,7 +114,9 @@ pub fn ayx_paths() -> Value {
 
 pub fn server_logs(path: &Path) -> Result<Value> {
     let mut logs = Vec::new();
-    for entry in fs::read_dir(path).with_context(|| format!("failed to read '{}'", path.display()))? {
+    for entry in
+        fs::read_dir(path).with_context(|| format!("failed to read '{}'", path.display()))?
+    {
         let entry = entry?;
         if entry.file_type()?.is_file() {
             logs.push(entry.path().display().to_string());
@@ -155,13 +157,24 @@ pub fn run_server_backup(
     let execution = if apply {
         let settings_dir = backup_dir.join("settings");
         let mongo_dir = backup_dir.join("MongoDB");
-        fs::create_dir_all(&settings_dir)
-            .with_context(|| format!("failed to create backup directory '{}'", settings_dir.display()))?;
-        fs::create_dir_all(&mongo_dir)
-            .with_context(|| format!("failed to create mongo backup directory '{}'", mongo_dir.display()))?;
+        fs::create_dir_all(&settings_dir).with_context(|| {
+            format!(
+                "failed to create backup directory '{}'",
+                settings_dir.display()
+            )
+        })?;
+        fs::create_dir_all(&mongo_dir).with_context(|| {
+            format!(
+                "failed to create mongo backup directory '{}'",
+                mongo_dir.display()
+            )
+        })?;
 
         let mut copied = Vec::new();
-        copied.push(copy_file(&runtime_settings, &settings_dir.join("RuntimeSettings.xml"))?);
+        copied.push(copy_file(
+            &runtime_settings,
+            &settings_dir.join("RuntimeSettings.xml"),
+        )?);
         for path in &connection_paths {
             if let Some(name) = path.file_name() {
                 copied.push(copy_file(path, &settings_dir.join(name))?);
@@ -216,7 +229,13 @@ fn local_ip_address() -> Option<String> {
 
 fn disk_stats() -> Value {
     let mut out = serde_json::Map::new();
-    if let Ok(output) = Command::new("cmd").args(["/C", "wmic logicaldisk get Caption,FreeSpace,Size /format:csv"]).output() {
+    if let Ok(output) = Command::new("cmd")
+        .args([
+            "/C",
+            "wmic logicaldisk get Caption,FreeSpace,Size /format:csv",
+        ])
+        .output()
+    {
         let text = String::from_utf8_lossy(&output.stdout);
         for line in text.lines().skip(1) {
             let cols: Vec<&str> = line.split(',').collect();
@@ -224,8 +243,14 @@ fn disk_stats() -> Value {
                 continue;
             }
             let caption = cols.get(1).copied().unwrap_or("").trim();
-            let free = cols.get(2).and_then(|v| v.trim().parse::<f64>().ok()).unwrap_or(0.0);
-            let total = cols.get(3).and_then(|v| v.trim().parse::<f64>().ok()).unwrap_or(0.0);
+            let free = cols
+                .get(2)
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let total = cols
+                .get(3)
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .unwrap_or(0.0);
             if caption.is_empty() || total <= 0.0 {
                 continue;
             }
@@ -417,7 +442,12 @@ fn extract_install_path_candidates(runtime_settings: &Path) -> Result<Vec<PathBu
     })?;
     let doc = roxmltree::Document::parse(&xml).context("failed to parse runtime settings xml")?;
     let mut candidates = Vec::new();
-    for key in ["LoggingPath", "WorkingPath", "WebInterfaceStagingPath", "SQLitePath"] {
+    for key in [
+        "LoggingPath",
+        "WorkingPath",
+        "WebInterfaceStagingPath",
+        "SQLitePath",
+    ] {
         if let Some(value) = first_text(&doc, &[key]) {
             let pb = PathBuf::from(value);
             if let Some(parent) = pb.parent() {
@@ -435,11 +465,17 @@ fn extract_install_path_candidates(runtime_settings: &Path) -> Result<Vec<PathBu
 fn connection_file_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Ok(pd) = std::env::var("ProgramData") {
-        paths.push(PathBuf::from(format!(r"{pd}\Alteryx\Engine\SystemConnections.xml")));
-        paths.push(PathBuf::from(format!(r"{pd}\Alteryx\Engine\SystemAlias.xml")));
+        paths.push(PathBuf::from(format!(
+            r"{pd}\Alteryx\Engine\SystemConnections.xml"
+        )));
+        paths.push(PathBuf::from(format!(
+            r"{pd}\Alteryx\Engine\SystemAlias.xml"
+        )));
     }
     if let Ok(ad) = std::env::var("APPDATA") {
-        paths.push(PathBuf::from(format!(r"{ad}\Alteryx\Engine\UserConnections.xml")));
+        paths.push(PathBuf::from(format!(
+            r"{ad}\Alteryx\Engine\UserConnections.xml"
+        )));
         paths.push(PathBuf::from(format!(r"{ad}\Alteryx\Engine\UserAlias.xml")));
     }
     paths.into_iter().filter(|p| p.exists()).collect()

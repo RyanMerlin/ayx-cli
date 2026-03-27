@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -49,7 +49,7 @@ pub fn write_run_manifest(
     details: Option<&Value>,
 ) -> Result<PathBuf> {
     let payload = json!({
-        "timestamp_utc": DateTime::<Utc>::from(Utc::now()).to_rfc3339(),
+        "timestamp_utc": Utc::now().to_rfc3339(),
         "command": command,
         "status": status,
         "artifacts": artifacts.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),

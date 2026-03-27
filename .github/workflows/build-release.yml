@@ -48,6 +48,25 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --check
+        shell: ${{ matrix.shell }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        shell: ${{ matrix.shell }}
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Run tests
+        run: cargo test --workspace --locked
+        shell: ${{ matrix.shell }}
+        env:
+          CARGO_TERM_COLOR: always
 
       - name: Build release
         run: cargo build --release --locked --target ${{ matrix.target }}

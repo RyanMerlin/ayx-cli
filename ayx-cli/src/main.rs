@@ -1,29 +1,27 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
 
+use ayx_core::definitions::DEFAULT_RUNTIME_SETTINGS_PATH;
 use ayx_core::envelope::Envelope;
 use ayx_core::profile::{Config, ServerProfile};
-use ayx_core::definitions::DEFAULT_RUNTIME_SETTINGS_PATH;
-use ayx_server::mongo::{
-    backup_envelope, inventory_envelope, restore_envelope, status_envelope,
-};
 use ayx_server::logs::{
     discover_log_inventory, extract_context, parse_gallery_csv, parse_gallery_events,
     parse_service_events, recent_log_candidates, summarize_log_file, tail_log_file,
 };
-use ayx_server::{call_operation, import_swagger};
+use ayx_server::mongo::{backup_envelope, inventory_envelope, restore_envelope, status_envelope};
+use ayx_server::upgrade::{
+    compute_path, run_apply, run_backup, run_bundle, run_plan, run_postcheck, run_precheck,
+};
 use ayx_server::util::{
     ayx_paths, backup_plan, capture_system_info, run_server_backup, runtime_settings_summary,
     write_runtime_settings_json,
 };
-use ayx_server::upgrade::{
-    compute_path, run_apply, run_backup, run_bundle, run_plan, run_postcheck, run_precheck,
-};
+use ayx_server::{call_operation, import_swagger};
 use self_update::backends::github::Update as GitHubUpdate;
 use self_update::Status;
 
@@ -56,9 +54,18 @@ enum Command {
         #[command(subcommand)]
         command: UpgradeCommand,
     },
-    Sqlserver,
-    Workflow,
-    Cloud,
+    Sqlserver {
+        #[command(subcommand)]
+        command: SqlserverCommand,
+    },
+    Workflow {
+        #[command(subcommand)]
+        command: WorkflowCommand,
+    },
+    Cloud {
+        #[command(subcommand)]
+        command: CloudCommand,
+    },
     Update {
         #[arg(long, default_value = "RyanMerlin")]
         repo_owner: String,
@@ -789,6 +796,25 @@ enum ServerCommand {
 }
 
 #[derive(Subcommand, Debug)]
+enum SqlserverCommand {
+    Status,
+    Inventory,
+}
+
+#[derive(Subcommand, Debug)]
+enum WorkflowCommand {
+    Status,
+    Inventory,
+    Logs,
+}
+
+#[derive(Subcommand, Debug)]
+enum CloudCommand {
+    Status,
+    Inventory,
+}
+
+#[derive(Subcommand, Debug)]
 enum ServerLogsCommand {
     Discover {
         #[arg(long, default_value = "config.yaml")]
@@ -930,11 +956,11 @@ enum UpgradeCommand {
     },
 }
 
-fn load_profile(path: &PathBuf) -> Result<Config> {
+fn load_profile(path: &Path) -> Result<Config> {
     Ok(Config::load_from_path(path)?)
 }
 
-fn load_payload(path: &PathBuf) -> Result<Value> {
+fn load_payload(path: &Path) -> Result<Value> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("failed to read payload file '{}'", path.display()))?;
     let value = serde_json::from_str(&content)
@@ -2505,7 +2531,7 @@ fn execute(cli: Cli) -> Result<Envelope> {
                         recent_log_candidates(&config, days),
                     )
                 }
-            }
+            },
             ServerCommand::BackupPlan { backup_dir } => {
                 let plan = backup_plan(&backup_dir)?;
                 Envelope::ok_with_data("backup plan generated", plan)
@@ -2587,9 +2613,19 @@ fn execute(cli: Cli) -> Result<Envelope> {
                 Envelope::ok_with_data("upgrade bundle created", detail)
             }
         },
-        Command::Sqlserver => Envelope::ok("sqlserver command tree scaffolded"),
-        Command::Workflow => Envelope::ok("workflow command tree scaffolded"),
-        Command::Cloud => Envelope::ok("cloud command tree scaffolded"),
+        Command::Sqlserver { command } => match command {
+            SqlserverCommand::Status => bail!("sqlserver status is not yet implemented"),
+            SqlserverCommand::Inventory => bail!("sqlserver inventory is not yet implemented"),
+        },
+        Command::Workflow { command } => match command {
+            WorkflowCommand::Status => bail!("workflow status is not yet implemented"),
+            WorkflowCommand::Inventory => bail!("workflow inventory is not yet implemented"),
+            WorkflowCommand::Logs => bail!("workflow logs are not yet implemented"),
+        },
+        Command::Cloud { command } => match command {
+            CloudCommand::Status => bail!("cloud status is not yet implemented"),
+            CloudCommand::Inventory => bail!("cloud inventory is not yet implemented"),
+        },
         Command::Update {
             repo_owner,
             repo_name,
@@ -2621,7 +2657,7 @@ fn perform_self_update(
         .repo_name(repo_name)
         .bin_name(bin_name)
         .current_version(env!("CARGO_PKG_VERSION"))
-        .target(&target);
+        .target(target);
 
     if let Some(version) = target_version {
         builder.target_version_tag(version);

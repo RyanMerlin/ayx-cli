@@ -514,13 +514,13 @@ pub fn run_apply(manifest_path: &Path, apply: bool, yes: bool) -> Result<Value> 
     }
     let (valid, reason, payload) = manifest::validate_plan_manifest(manifest_path)?;
     if !valid {
-        return Ok(json!({"ok": false, "error": reason})); 
+        return Ok(json!({"ok": false, "error": reason}));
     }
     let plan = payload.get("plan").cloned().unwrap_or_else(|| json!({}));
     let steps = plan
         .get("steps")
         .and_then(Value::as_array)
-        .map(|arr| arr.clone())
+        .cloned()
         .unwrap_or_default();
     let mut audit_rows = Vec::new();
     for step in steps {
@@ -555,7 +555,7 @@ pub fn run_apply(manifest_path: &Path, apply: bool, yes: bool) -> Result<Value> 
         manifest_path.parent().unwrap_or_else(|| Path::new(".")),
         "upgrade apply",
         "ok",
-        &[audit_path.clone()],
+        std::slice::from_ref(&audit_path),
         Some(&json!({"plan_manifest": manifest_path.display().to_string()})),
     )?;
     Ok(json!({
@@ -646,7 +646,7 @@ pub fn run_postcheck(config: &Config, manifest_path: &Path, out_dir: &Path) -> R
         },
         &[post_path.clone(), mismatch_path.clone()],
         Some(&json!({
-            "plan_target": payload.get("plan").and_then(|p| p.get("target")).cloned().unwrap_or_else(|| json!(null)),
+            "plan_target": payload.get("plan").and_then(|p| p.get("target")).cloned().unwrap_or(Value::Null),
         })),
     )?;
     Ok(json!({

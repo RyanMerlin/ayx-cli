@@ -1,5 +1,5 @@
-pub mod mongo;
 pub mod logs;
+pub mod mongo;
 pub mod sqlserver;
 pub mod upgrade;
 pub mod util;

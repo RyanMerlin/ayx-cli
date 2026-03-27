@@ -3,9 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use csv::ReaderBuilder;
 use ayx_core::profile::Config;
 use chrono::{DateTime, Utc};
+use csv::ReaderBuilder;
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone)]
@@ -18,56 +18,66 @@ pub struct LogSource {
 }
 
 pub fn discover_log_sources(config: &Config) -> Vec<LogSource> {
-    let runtime = config.mongo.embedded.as_ref().and_then(|e| e.runtime_settings_path.as_ref());
+    let runtime = config
+        .mongo
+        .embedded
+        .as_ref()
+        .and_then(|e| e.runtime_settings_path.as_ref());
     let runtime_dir = runtime
         .and_then(|p| Path::new(p).parent())
         .map(|p| p.to_path_buf())
-        .or_else(|| std::env::var("ProgramData").ok().map(|pd| PathBuf::from(pd).join("Alteryx")));
+        .or_else(|| {
+            std::env::var("ProgramData")
+                .ok()
+                .map(|pd| PathBuf::from(pd).join("Alteryx"))
+        });
 
-    let mut out = Vec::new();
-    out.push(LogSource {
-        kind: "service",
-        name: "Alteryx Service",
-        path: runtime_dir.as_ref().map(|p| p.join("Service")),
-        pattern: "AlteryxServiceLog.log",
-        notes: "startup/shutdown and component communication",
-    });
-    out.push(LogSource {
-        kind: "gallery",
-        name: "Server / Gallery",
-        path: runtime_dir.as_ref().map(|p| p.join("Gallery").join("Logs")),
-        pattern: "alteryx-YYYY-MM-DD.csv",
-        notes: "server processes, schedule migrations, analytic app errors",
-    });
-    out.push(LogSource {
-        kind: "engine",
-        name: "Engine",
-        path: engine_log_dir(config),
-        pattern: "Alteryx_Log_*.log",
-        notes: "workflow execution and tool timestamps",
-    });
-    out.push(LogSource {
-        kind: "ui_error",
-        name: "UI Error Logs",
-        path: runtime_dir.as_ref().map(|p| p.join("ErrorLogs")),
-        pattern: "*.log",
-        notes: "stack traces from UI failures",
-    });
-    out.push(LogSource {
-        kind: "aas",
-        name: "Authentication Service",
-        path: runtime_dir.as_ref().map(|p| p.join("Logs")),
-        pattern: "aas-log-YYYYMMDD.*",
-        notes: "SAML / authentication service activity",
-    });
-    out.push(LogSource {
-        kind: "config_changes",
-        name: "Configuration Changes",
-        path: runtime_dir.as_ref().map(|p| p.parent().unwrap_or(p).to_path_buf()),
-        pattern: "*log*",
-        notes: "system settings change log stored near RuntimeSettings.xml",
-    });
-    out
+    vec![
+        LogSource {
+            kind: "service",
+            name: "Alteryx Service",
+            path: runtime_dir.as_ref().map(|p| p.join("Service")),
+            pattern: "AlteryxServiceLog.log",
+            notes: "startup/shutdown and component communication",
+        },
+        LogSource {
+            kind: "gallery",
+            name: "Server / Gallery",
+            path: runtime_dir.as_ref().map(|p| p.join("Gallery").join("Logs")),
+            pattern: "alteryx-YYYY-MM-DD.csv",
+            notes: "server processes, schedule migrations, analytic app errors",
+        },
+        LogSource {
+            kind: "engine",
+            name: "Engine",
+            path: engine_log_dir(config),
+            pattern: "Alteryx_Log_*.log",
+            notes: "workflow execution and tool timestamps",
+        },
+        LogSource {
+            kind: "ui_error",
+            name: "UI Error Logs",
+            path: runtime_dir.as_ref().map(|p| p.join("ErrorLogs")),
+            pattern: "*.log",
+            notes: "stack traces from UI failures",
+        },
+        LogSource {
+            kind: "aas",
+            name: "Authentication Service",
+            path: runtime_dir.as_ref().map(|p| p.join("Logs")),
+            pattern: "aas-log-YYYYMMDD.*",
+            notes: "SAML / authentication service activity",
+        },
+        LogSource {
+            kind: "config_changes",
+            name: "Configuration Changes",
+            path: runtime_dir
+                .as_ref()
+                .map(|p| p.parent().unwrap_or(p).to_path_buf()),
+            pattern: "*log*",
+            notes: "system settings change log stored near RuntimeSettings.xml",
+        },
+    ]
 }
 
 pub fn discover_log_inventory(config: &Config) -> Value {
@@ -187,13 +197,19 @@ pub fn parse_service_events(path: &Path) -> Result<Value> {
             "message": message,
         });
 
-        if let Some(parsed) = parse_setting_root_message(event.get("message").and_then(Value::as_str).unwrap_or("")) {
+        if let Some(parsed) =
+            parse_setting_root_message(event.get("message").and_then(Value::as_str).unwrap_or(""))
+        {
             event["kind"] = json!("config_setting");
             event["setting"] = parsed;
-        } else if let Some(parsed) = parse_startup_message(event.get("message").and_then(Value::as_str).unwrap_or("")) {
+        } else if let Some(parsed) =
+            parse_startup_message(event.get("message").and_then(Value::as_str).unwrap_or(""))
+        {
             event["kind"] = json!("startup");
             event["startup"] = parsed;
-        } else if let Some(parsed) = parse_request_message(event.get("message").and_then(Value::as_str).unwrap_or("")) {
+        } else if let Some(parsed) =
+            parse_request_message(event.get("message").and_then(Value::as_str).unwrap_or(""))
+        {
             event["kind"] = json!("request");
             event["request"] = parsed;
         } else {
@@ -203,9 +219,18 @@ pub fn parse_service_events(path: &Path) -> Result<Value> {
         events.push(event);
     }
 
-    let startup_events = events.iter().filter(|e| e.get("kind").and_then(Value::as_str) == Some("startup")).count();
-    let request_events = events.iter().filter(|e| e.get("kind").and_then(Value::as_str) == Some("request")).count();
-    let setting_events = events.iter().filter(|e| e.get("kind").and_then(Value::as_str) == Some("config_setting")).count();
+    let startup_events = events
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("startup"))
+        .count();
+    let request_events = events
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("request"))
+        .count();
+    let setting_events = events
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("config_setting"))
+        .count();
 
     Ok(json!({
         "path": path.display().to_string(),
@@ -235,7 +260,9 @@ pub fn parse_gallery_events(path: &Path) -> Result<Value> {
         }
 
         let kind = if message.to_ascii_lowercase().contains(" started at http")
-            || message.to_ascii_lowercase().contains("starting cloud services")
+            || message
+                .to_ascii_lowercase()
+                .contains("starting cloud services")
         {
             "startup"
         } else if message.to_ascii_lowercase().contains("unauthenticated")
@@ -260,7 +287,9 @@ pub fn parse_gallery_events(path: &Path) -> Result<Value> {
                 "message": message,
             });
             if kind == "request" {
-                if let Some(parsed) = parse_gallery_request_message(event.get("message").and_then(Value::as_str).unwrap_or("")) {
+                if let Some(parsed) = parse_gallery_request_message(
+                    event.get("message").and_then(Value::as_str).unwrap_or(""),
+                ) {
                     event["request"] = parsed;
                 }
             }
@@ -281,7 +310,10 @@ pub fn extract_context(path: &Path, needle: &str, before: usize, after: usize) -
     let lines: Vec<&str> = text.lines().collect();
     let mut matches = Vec::new();
     for (idx, line) in lines.iter().enumerate() {
-        if line.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
+        if line
+            .to_ascii_lowercase()
+            .contains(&needle.to_ascii_lowercase())
+        {
             let start = idx.saturating_sub(before);
             let end = (idx + after + 1).min(lines.len());
             matches.push(json!({
@@ -367,12 +399,14 @@ fn engine_log_dir(config: &Config) -> Option<PathBuf> {
 }
 
 fn read_log_text(path: &Path) -> Result<String> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read log file '{}'", path.display()))?;
+    let bytes =
+        fs::read(path).with_context(|| format!("failed to read log file '{}'", path.display()))?;
     Ok(decode_log_bytes(&bytes))
 }
 
 fn read_log_rows(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>)> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read log file '{}'", path.display()))?;
+    let bytes =
+        fs::read(path).with_context(|| format!("failed to read log file '{}'", path.display()))?;
     let text = decode_log_bytes(&bytes);
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
@@ -472,7 +506,10 @@ fn parse_startup_message(message: &str) -> Option<Value> {
 
 fn parse_request_message(message: &str) -> Option<Value> {
     let lower = message.to_ascii_lowercase();
-    if !lower.contains("/gallery/api/") && !lower.contains("requestcode") && !lower.contains("responsecode") {
+    if !lower.contains("/gallery/api/")
+        && !lower.contains("requestcode")
+        && !lower.contains("responsecode")
+    {
         return None;
     }
     Some(json!({
@@ -502,7 +539,9 @@ fn parse_gallery_request_message(message: &str) -> Option<Value> {
 
 fn extract_http_method(message: &str) -> Option<String> {
     for method in ["GET", "POST", "PUT", "PATCH", "DELETE"] {
-        if message.contains(&format!(" {method} ")) || message.contains(&format!("Method <{method}>")) {
+        if message.contains(&format!(" {method} "))
+            || message.contains(&format!("Method <{method}>"))
+        {
             return Some(method.to_string());
         }
     }

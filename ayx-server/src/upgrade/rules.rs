@@ -60,8 +60,7 @@ impl UpgradeRules {
                 ],
                 edges: HashMap::new(),
             });
-        let issues =
-            read_optional_yaml(folder.join("known_issues.yaml")).unwrap_or_else(|| Vec::new());
+        let issues = read_optional_yaml(folder.join("known_issues.yaml")).unwrap_or_default();
         UpgradeRules { paths, issues }
     }
 
@@ -145,6 +144,12 @@ impl UpgradeRules {
                 .collect();
         }
         vec![]
+    }
+}
+
+impl Default for UpgradeRules {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
