@@ -66,6 +66,10 @@ enum Command {
         #[command(subcommand)]
         command: Option<CloudCommand>,
     },
+    Catalog {
+        #[command(subcommand)]
+        command: CatalogCommand,
+    },
     Update {
         #[arg(long, default_value = "RyanMerlin")]
         repo_owner: String,
@@ -813,6 +817,159 @@ enum CloudCommand {
     Status,
     Inventory,
 }
+
+#[derive(Subcommand, Debug)]
+enum CatalogCommand {
+    List,
+    Describe {
+        #[arg(long)]
+        command: String,
+    },
+}
+
+#[derive(Debug)]
+struct CommandSpec {
+    name: &'static str,
+    path: &'static str,
+    summary: &'static str,
+    output: &'static str,
+    safety: &'static str,
+    mutating: bool,
+    prerequisites: &'static [&'static str],
+    notes: &'static [&'static str],
+}
+
+const COMMAND_SPECS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "mongo status",
+        path: "mongo/status",
+        summary: "Resolve the configured Mongo connection and database names.",
+        output: "connection detail and database metadata",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["config.yaml", "mongo.mode", "mongo.databases"],
+        notes: &["Use this first to validate embedded or managed Mongo configuration."],
+    },
+    CommandSpec {
+        name: "mongo inventory",
+        path: "mongo/inventory",
+        summary: "Generate an inventory plan for the Mongo-backed databases.",
+        output: "database inventory plan",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["config.yaml", "mongo.databases"],
+        notes: &["Use this before backup or restore planning."],
+    },
+    CommandSpec {
+        name: "mongo backup",
+        path: "mongo/backup",
+        summary: "Back up the Gallery and Service Mongo databases.",
+        output: "backup plan or execution artifacts",
+        safety: "mutating",
+        mutating: true,
+        prerequisites: &["config.yaml", "mongo.mode"],
+        notes: &[
+            "Requires --apply for a live backup.",
+            "Writes audit artifacts.",
+        ],
+    },
+    CommandSpec {
+        name: "mongo restore",
+        path: "mongo/restore",
+        summary: "Restore Mongo data from a backup input path.",
+        output: "restore execution artifacts",
+        safety: "mutating",
+        mutating: true,
+        prerequisites: &["config.yaml", "restore input path"],
+        notes: &[
+            "Requires --apply for a live restore.",
+            "Writes audit artifacts.",
+        ],
+    },
+    CommandSpec {
+        name: "api status",
+        path: "api/status",
+        summary: "Validate Server API connectivity and auth.",
+        output: "status response payload",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["config.yaml", "api.base_url", "api.auth"],
+        notes: &["Use this before other API commands."],
+    },
+    CommandSpec {
+        name: "api users",
+        path: "api/users",
+        summary: "List Server users.",
+        output: "user listing",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["config.yaml", "api.base_url"],
+        notes: &["Useful for operator inventory and agent discovery."],
+    },
+    CommandSpec {
+        name: "api workflow-transfer-owner",
+        path: "api/transfer-workflow-owner",
+        summary: "Transfer workflow ownership through the API.",
+        output: "dry-run or execution audit artifacts",
+        safety: "mutating",
+        mutating: true,
+        prerequisites: &["config.yaml", "alteryx_one.account_email"],
+        notes: &[
+            "Requires --apply for live execution.",
+            "Creates an audit artifact.",
+        ],
+    },
+    CommandSpec {
+        name: "server api import-swagger",
+        path: "server/api/import-swagger",
+        summary: "Download and cache the Server OpenAPI document.",
+        output: "cached swagger metadata",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["config.yaml", "server.webapi_url"],
+        notes: &["Use before server api call."],
+    },
+    CommandSpec {
+        name: "server api call",
+        path: "server/api/call",
+        summary: "Invoke a Server API operation by operationId.",
+        output: "call response envelope",
+        safety: "mutating-or-read-only",
+        mutating: false,
+        prerequisites: &["cached Swagger document", "config.yaml"],
+        notes: &["Operation behavior depends on the selected endpoint."],
+    },
+    CommandSpec {
+        name: "upgrade plan",
+        path: "upgrade/plan",
+        summary: "Compute an upgrade path between versions.",
+        output: "upgrade plan manifest",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["source version", "target version"],
+        notes: &["Use this to map supported upgrade hops."],
+    },
+    CommandSpec {
+        name: "catalog list",
+        path: "catalog/list",
+        summary: "List machine-readable command metadata.",
+        output: "command catalog entries",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["none"],
+        notes: &["Use this when another tool needs to discover available commands."],
+    },
+    CommandSpec {
+        name: "catalog describe",
+        path: "catalog/describe",
+        summary: "Describe a single command in the catalog.",
+        output: "single command metadata",
+        safety: "read-only",
+        mutating: false,
+        prerequisites: &["catalog entry name or path"],
+        notes: &["Accepts either a name or a path-like catalog key."],
+    },
+];
 
 #[derive(Subcommand, Debug)]
 enum ServerLogsCommand {
@@ -2634,6 +2791,10 @@ fn execute(cli: Cli) -> Result<Envelope> {
             Some(CloudCommand::Status) => bail!("cloud status is not yet implemented"),
             Some(CloudCommand::Inventory) => bail!("cloud inventory is not yet implemented"),
         },
+        Command::Catalog { command } => match command {
+            CatalogCommand::List => catalog_list_envelope()?,
+            CatalogCommand::Describe { command } => catalog_describe_envelope(&command)?,
+        },
         Command::Update {
             repo_owner,
             repo_name,
@@ -2726,7 +2887,7 @@ fn main() -> Result<()> {
 
 fn print_help() {
     println!(
-        "AYX Rust CLI\n\nUSAGE:\n    ayx [OPTIONS] <COMMAND>\n\nOPTIONS:\n    --help       Print this help message\n    --output     Output format: text or json\n\nCOMMANDS:\n    mongo        Mongo inventory, backup, and restore\n    api          Server API operations\n    server       Server discovery, logs, Swagger, and low-level API calls\n    upgrade      Upgrade planning and execution helpers\n    sqlserver    SQL Server command family (stubbed)\n    workflow     Workflow command family (stubbed)\n    cloud        Cloud command family (stubbed)\n    update       Self-update from GitHub releases\n"
+        "AYX Rust CLI\n\nUSAGE:\n    ayx [OPTIONS] <COMMAND>\n\nOPTIONS:\n    --help       Print this help message\n    --output     Output format: text or json\n\nCOMMANDS:\n    mongo        Mongo inventory, backup, and restore\n    api          Server API operations\n    server       Server discovery, logs, Swagger, and low-level API calls\n    upgrade      Upgrade planning and execution helpers\n    catalog      Machine-readable command registry\n    sqlserver    SQL Server command family (stubbed)\n    workflow     Workflow command family (stubbed)\n    cloud        Cloud command family (stubbed)\n    update       Self-update from GitHub releases\n"
     );
 }
 
@@ -2734,4 +2895,77 @@ fn wants_help() -> bool {
     std::env::args()
         .skip(1)
         .any(|arg| arg == "--help" || arg == "-h")
+}
+
+fn catalog_list_envelope() -> Result<Envelope> {
+    let commands: Vec<Value> = COMMAND_SPECS
+        .iter()
+        .map(|spec| {
+            json!({
+                "name": spec.name,
+                "path": spec.path,
+                "summary": spec.summary,
+                "output": spec.output,
+                "safety": spec.safety,
+                "mutating": spec.mutating,
+            })
+        })
+        .collect();
+
+    Ok(Envelope::ok_with_data(
+        "catalog entries listed",
+        json!({
+            "count": commands.len(),
+            "commands": commands,
+        }),
+    ))
+}
+
+fn catalog_describe_envelope(command: &str) -> Result<Envelope> {
+    let spec = COMMAND_SPECS
+        .iter()
+        .find(|spec| spec.name == command || spec.path == command)
+        .ok_or_else(|| anyhow!("catalog entry '{}' not found", command))?;
+
+    Ok(Envelope::ok_with_data(
+        "catalog entry described",
+        json!({
+            "name": spec.name,
+            "path": spec.path,
+            "summary": spec.summary,
+            "output": spec.output,
+            "safety": spec.safety,
+            "mutating": spec.mutating,
+            "prerequisites": spec.prerequisites,
+            "notes": spec.notes,
+        }),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catalog_list_includes_core_commands() {
+        let env = catalog_list_envelope().expect("catalog list should succeed");
+        let commands = env.data["commands"].as_array().expect("commands array");
+        let names: Vec<&str> = commands
+            .iter()
+            .filter_map(|item| item.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(names.contains(&"mongo status"));
+        assert!(names.contains(&"catalog list"));
+    }
+
+    #[test]
+    fn catalog_describe_finds_path_or_name() {
+        let env = catalog_describe_envelope("mongo backup").expect("catalog describe should work");
+        assert_eq!(env.data["name"], "mongo backup");
+        assert_eq!(env.data["mutating"], true);
+
+        let env = catalog_describe_envelope("server/api/import-swagger")
+            .expect("catalog describe should work by path");
+        assert_eq!(env.data["name"], "server api import-swagger");
+    }
 }

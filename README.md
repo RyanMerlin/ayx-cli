@@ -40,6 +40,7 @@ ayx server
 - `api` for the Server web API
 - `server` for environment inspection, logs, Swagger import, and lower-level API calls
 - `upgrade` for upgrade path planning, prechecks, backup, apply simulation, and postchecks
+- `catalog` for machine-readable command discovery
 - `update` for GitHub release self-update
 
 The tool returns a consistent envelope model so humans and agents can parse success, failure, and artifact paths in the same way.
@@ -90,6 +91,13 @@ That means:
 - workflow/skill descriptions for multi-step operations
 - structured evidence after every run
 - documentation that stays aligned with the actual binary
+
+Start with:
+
+```powershell
+ayx catalog list
+ayx catalog describe --command mongo/backup
+```
 
 ## Development
 

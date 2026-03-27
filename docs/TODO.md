@@ -31,5 +31,5 @@ This is the working plan for evolving the AYX CLI into a production-grade, agent
 
 ## Current priority
 - finish the integration-test pass for the core workflows.
-- then layer the command registry on top of the stable CLI surface.
+- expand the command registry with richer command metadata and generated docs.
 - keep the higher-order tactics and workflow registry in follow-up work until the command catalog is available.
