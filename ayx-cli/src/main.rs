@@ -48,7 +48,7 @@ enum Command {
     },
     Server {
         #[command(subcommand)]
-        command: ServerCommand,
+        command: Option<ServerCommand>,
     },
     Upgrade {
         #[command(subcommand)]
@@ -56,15 +56,15 @@ enum Command {
     },
     Sqlserver {
         #[command(subcommand)]
-        command: SqlserverCommand,
+        command: Option<SqlserverCommand>,
     },
     Workflow {
         #[command(subcommand)]
-        command: WorkflowCommand,
+        command: Option<WorkflowCommand>,
     },
     Cloud {
         #[command(subcommand)]
-        command: CloudCommand,
+        command: Option<CloudCommand>,
     },
     Update {
         #[arg(long, default_value = "RyanMerlin")]
@@ -2412,7 +2412,8 @@ fn execute(cli: Cli) -> Result<Envelope> {
             }
         },
         Command::Server { command } => match command {
-            ServerCommand::Api { command } => match command {
+            None => Envelope::ok("server commands: api, system-info, runtime-settings, ayx-paths, server-logs, backup-plan, backup"),
+            Some(ServerCommand::Api { command }) => match command {
                 ServerApiCommand::ImportSwagger {
                     profile,
                     version,
@@ -2453,7 +2454,7 @@ fn execute(cli: Cli) -> Result<Envelope> {
                     call_operation(server, &operation_id, &params, payload, &swagger_path)?
                 }
             },
-            ServerCommand::SystemInfo { output } => {
+            Some(ServerCommand::SystemInfo { output }) => {
                 let system_info = capture_system_info()?;
                 fs::write(&output, serde_json::to_string_pretty(&system_info)?)
                     .with_context(|| format!("failed to write '{}'", output.display()))?;
@@ -2462,7 +2463,7 @@ fn execute(cli: Cli) -> Result<Envelope> {
                     json!({ "output": output.display().to_string(), "data": system_info }),
                 )
             }
-            ServerCommand::RuntimeSettings { path, output } => {
+            Some(ServerCommand::RuntimeSettings { path, output }) => {
                 let summary = runtime_settings_summary(&path)?;
                 if let Some(ref output_path) = output {
                     write_runtime_settings_json(&path, output_path)?;
@@ -2476,11 +2477,11 @@ fn execute(cli: Cli) -> Result<Envelope> {
                     }),
                 )
             }
-            ServerCommand::AyxPaths => {
+            Some(ServerCommand::AyxPaths) => {
                 let paths = ayx_paths();
                 Envelope::ok_with_data("ayx paths resolved", paths)
             }
-            ServerCommand::ServerLogs { command } => match command {
+            Some(ServerCommand::ServerLogs { command }) => match command {
                 ServerLogsCommand::Discover { profile } => {
                     let config = load_profile(&profile)?;
                     Envelope::ok_with_data(
@@ -2532,16 +2533,16 @@ fn execute(cli: Cli) -> Result<Envelope> {
                     )
                 }
             },
-            ServerCommand::BackupPlan { backup_dir } => {
+            Some(ServerCommand::BackupPlan { backup_dir }) => {
                 let plan = backup_plan(&backup_dir)?;
                 Envelope::ok_with_data("backup plan generated", plan)
             }
-            ServerCommand::Backup {
+            Some(ServerCommand::Backup {
                 profile,
                 backup_dir,
                 apply,
                 audit_dir,
-            } => {
+            }) => {
                 let config = load_profile(&profile)?;
                 let data = run_server_backup(&config, &backup_dir, apply, &audit_dir)?;
                 Envelope::ok_with_data(
@@ -2614,17 +2615,24 @@ fn execute(cli: Cli) -> Result<Envelope> {
             }
         },
         Command::Sqlserver { command } => match command {
-            SqlserverCommand::Status => bail!("sqlserver status is not yet implemented"),
-            SqlserverCommand::Inventory => bail!("sqlserver inventory is not yet implemented"),
+            None => Envelope::ok("sqlserver commands are not yet implemented"),
+            Some(SqlserverCommand::Status) => bail!("sqlserver status is not yet implemented"),
+            Some(SqlserverCommand::Inventory) => {
+                bail!("sqlserver inventory is not yet implemented")
+            }
         },
         Command::Workflow { command } => match command {
-            WorkflowCommand::Status => bail!("workflow status is not yet implemented"),
-            WorkflowCommand::Inventory => bail!("workflow inventory is not yet implemented"),
-            WorkflowCommand::Logs => bail!("workflow logs are not yet implemented"),
+            None => Envelope::ok("workflow commands are not yet implemented"),
+            Some(WorkflowCommand::Status) => bail!("workflow status is not yet implemented"),
+            Some(WorkflowCommand::Inventory) => {
+                bail!("workflow inventory is not yet implemented")
+            }
+            Some(WorkflowCommand::Logs) => bail!("workflow logs are not yet implemented"),
         },
         Command::Cloud { command } => match command {
-            CloudCommand::Status => bail!("cloud status is not yet implemented"),
-            CloudCommand::Inventory => bail!("cloud inventory is not yet implemented"),
+            None => Envelope::ok("cloud commands are not yet implemented"),
+            Some(CloudCommand::Status) => bail!("cloud status is not yet implemented"),
+            Some(CloudCommand::Inventory) => bail!("cloud inventory is not yet implemented"),
         },
         Command::Update {
             repo_owner,
@@ -2682,6 +2690,10 @@ fn perform_self_update(
 }
 
 fn main() -> Result<()> {
+    if wants_help() {
+        print_help();
+        return Ok(());
+    }
     let cli = Cli::parse();
     let output_json = cli.output == "json";
 
@@ -2710,4 +2722,16 @@ fn main() -> Result<()> {
             Err(err)
         }
     }
+}
+
+fn print_help() {
+    println!(
+        "AYX Rust CLI\n\nUSAGE:\n    ayx [OPTIONS] <COMMAND>\n\nOPTIONS:\n    --help       Print this help message\n    --output     Output format: text or json\n\nCOMMANDS:\n    mongo        Mongo inventory, backup, and restore\n    api          Server API operations\n    server       Server discovery, logs, Swagger, and low-level API calls\n    upgrade      Upgrade planning and execution helpers\n    sqlserver    SQL Server command family (stubbed)\n    workflow     Workflow command family (stubbed)\n    cloud        Cloud command family (stubbed)\n    update       Self-update from GitHub releases\n"
+    );
+}
+
+fn wants_help() -> bool {
+    std::env::args()
+        .skip(1)
+        .any(|arg| arg == "--help" || arg == "-h")
 }
