@@ -1,0 +1,154 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+          rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --check
+        shell: pwsh
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        shell: pwsh
+      - name: Run tests
+        run: cargo test --workspace
+        shell: pwsh
+      - name: Build release
+        run: cargo build --release --target x86_64-pc-windows-msvc
+        shell: pwsh
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifactDir = Join-Path "${{ github.workspace }}" "dist"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+          $packageRoot = Join-Path $artifactDir "ayx-x86_64-pc-windows-msvc"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          Copy-Item (Join-Path "${{ github.workspace }}" "target/x86_64-pc-windows-msvc/release/ayx.exe") -Destination (Join-Path $packageRoot "ayx.exe")
+          Copy-Item "README.md" -Destination $packageRoot
+          Copy-Item "scripts/install.ps1" -Destination $packageRoot
+          Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath (Join-Path $artifactDir "ayx-x86_64-pc-windows-msvc.zip") -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ayx-x86_64-pc-windows-msvc
+          path: dist/ayx-x86_64-pc-windows-msvc.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
+          rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --check
+        shell: bash
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        shell: bash
+      - name: Run tests
+        run: cargo test --workspace
+        shell: bash
+      - name: Build release
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+        shell: bash
+      - name: Package Linux release
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="${GITHUB_WORKSPACE}/dist"
+          package_root="${artifact_dir}/ayx-x86_64-unknown-linux-gnu"
+          mkdir -p "$package_root"
+          cp "${GITHUB_WORKSPACE}/target/x86_64-unknown-linux-gnu/release/ayx" "$package_root/ayx"
+          cp README.md "$package_root/"
+          cp scripts/install.sh "$package_root/"
+          tar -czf "${artifact_dir}/ayx-x86_64-unknown-linux-gnu.tar.gz" -C "$artifact_dir" "ayx-x86_64-unknown-linux-gnu"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ayx-x86_64-unknown-linux-gnu
+          path: dist/ayx-x86_64-unknown-linux-gnu.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+          rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --check
+        shell: bash
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        shell: bash
+      - name: Run tests
+        run: cargo test --workspace
+        shell: bash
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+      - name: Package macOS release
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="${GITHUB_WORKSPACE}/dist"
+          package_root="${artifact_dir}/ayx-${{ matrix.target }}"
+          mkdir -p "$package_root"
+          cp "${GITHUB_WORKSPACE}/target/${{ matrix.target }}/release/ayx" "$package_root/ayx"
+          cp README.md "$package_root/"
+          cp scripts/install.sh "$package_root/"
+          tar -czf "${artifact_dir}/ayx-${{ matrix.target }}.tar.gz" -C "$artifact_dir" "ayx-${{ matrix.target }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ayx-${{ matrix.target }}
+          path: dist/ayx-${{ matrix.target }}.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-windows
+      - build-linux
+      - build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ayx-x86_64-pc-windows-msvc/ayx-x86_64-pc-windows-msvc.zip
+            dist/ayx-x86_64-unknown-linux-gnu/ayx-x86_64-unknown-linux-gnu.tar.gz
+            dist/ayx-x86_64-apple-darwin/ayx-x86_64-apple-darwin.tar.gz
+            dist/ayx-aarch64-apple-darwin/ayx-aarch64-apple-darwin.tar.gz
