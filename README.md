@@ -52,7 +52,7 @@ If you want the CLI to guide you through setup instead of editing YAML by hand, 
 ayx onboard --profile config.yaml
 ```
 
-The onboarding flow reuses existing values on later runs, masks stored secrets in its summary, and auto-discovers embedded Server runtime settings when `RuntimeSettings.xml` is available.
+The onboarding flow reuses existing values on later runs, treats SQL Server as optional, masks stored secrets in its summary, and auto-discovers embedded Server runtime settings when `RuntimeSettings.xml` is available.
 For automation or agents, add `--non-interactive` to validate an existing profile without prompting.
 
 For multi-environment setups, use a `workspace.yaml` file with named environments and select the active one with `--environment <name>`.
