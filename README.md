@@ -1,4 +1,4 @@
-# AYX CLI
+# AYX-RS
 
 `ayx` is a Rust workspace for Alteryx administrators and automation agents.
 
@@ -66,7 +66,13 @@ ayx mongo status --profile config.yaml
 ayx catalog list
 ```
 
-4. Use `--output json` when another tool should consume the result. For `workflow yxdb`, pair `--csv <path>` with top-level `--output json` if you want both export and structured metadata.
+4. Build from source if you want to hack on it locally:
+
+```powershell
+cargo install --locked --path .
+```
+
+5. Use `--output json` when another tool should consume the result. For `workflow yxdb`, pair `--csv <path>` with top-level `--output json` if you want both export and structured metadata.
 
 If you want the shortest path from zero to useful output, start with:
 
@@ -183,6 +189,16 @@ ayx mongo query --database AlteryxService --collection AS_Queue --filter "{}"
 ayx mongo doctor
 ```
 
+## Development
+
+Run checks locally:
+
+```powershell
+cargo fmt --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
 ## Fixtures
 
 The repository includes a `RuntimeSettings.xml` fixture for offline validation of embedded discovery paths.
@@ -196,4 +212,12 @@ The upgrade routing and issue annotations from the archived Omni repo are preser
 
 These files drive upgrade path planning and version-specific warnings in the CLI.
 
+## Preserved legacy artifacts
+
+The old `ayxm` repo is being archived, but a few reference files are kept here so the migration is auditable:
+
+- `docs/legacy/AYX_CLI_COMMANDS.yaml`
+- `docs/legacy/mongo_schema.py`
+
+These are reference artifacts only. They are not runtime dependencies of the Rust CLI.
 
